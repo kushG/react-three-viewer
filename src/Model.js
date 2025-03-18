@@ -4,45 +4,44 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { drawHitPoint } from './utils';
 
-function Model({ url, onClickData }) {
+function Model({ url, position = [0,0,0], onClick}) {
     const { scene, camera, size } = useThree();
-    const [error, setError] = useState(null);
-    const { scene: gltfScene } = useGLTF(url); // Load the model once at the top level
-    const modelRef = useRef(gltfScene);
+    const { scene: gltfScene, error: gltfError } = useGLTF(url, true, "https://www.gstatic.com/draco/v1/decoders/");
+
+    if (gltfError) {
+        console.error("Error loading GLTF model:", gltfError);
+        return null;
+    }
 
     const handlePointerDown = (event) => {
-        if (error || !modelRef.current) return;
-
         event.stopPropagation();
-        const { point } = event;
+        const { point, intersections } = event;
 
-        console.log("Point clicked:", point);
-        const clickePosition = [point.x, point.y, point.z];
-
-        const vector = new THREE.Vector3(point.x, point.y, point.z);
-        vector.project(camera);
-        const x = ((vector.x + 1) / 2) * size.width;
-        const y = ((1 - vector.y) / 2) * size.height;
-        const screenPosition = [x,y];
+        const clickPosition = [point.x, point.y, point.z];
+        const vector = new THREE.Vector3(point.x, point.y, point.z).project(camera);
+        const screenPosition = [
+            ((vector.x + 1) / 2) * size.width,
+            ((1 - vector.y) / 2) * size.height
+        ];
 
         const normal = new THREE.Vector3();
-        const intersects = event.intersections;
-        if (intersects.length > 0) {
-            const intersection = intersects[0];
-            normal.copy(intersection.face.normal);
-            normal.transformDirection(intersection.object.matrixWorld);
-        }        
+        if (intersections.length > 0) {
+            const intersection = intersections[0];
+            normal.copy(intersection.face.normal).transformDirection(intersection.object.matrixWorld);
+        }
 
-        // Draw the hit point and normal
         drawHitPoint(normal, point, scene, camera);
 
-        
-        if (onClickData) {
-            onClickData(clickePosition, normal.toArray());
-        }
+        if (onClick) 
+            onClick(clickPosition, normal.toArray());
     };
-
-    return modelRef.current ? <primitive object={modelRef.current} onPointerDown={handlePointerDown} /> : null;
+    
+    return gltfScene ? (
+        // set the position of the model
+        <group position={position}>
+            <primitive object={gltfScene} onPointerDown={handlePointerDown} /> 
+        </group>
+    ): null;
 }
 
 export default Model;
